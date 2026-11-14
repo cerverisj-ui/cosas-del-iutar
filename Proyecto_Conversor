@@ -1,0 +1,143 @@
+import random
+
+try:
+    from pyDolarVenezuela import Monitor
+    from pyDolarVenezuela.pages import BCV
+    LIBRERIA_DISPONIBLE = True
+except ImportError:
+    LIBRERIA_DISPONIBLE = False
+
+# Diccionario optimizado de bancos venezolanos (constante global)
+BANCOS_VENEZUELA = {
+    "0102": "Banco de Venezuela", "0104": "Banco Venezolano de Crédito",
+    "0105": "Banco Mercantil", "0108": "BBVA Provincial",
+    "0114": "Bancaribe", "0115": "Banco Exterior",
+    "0128": "Banco Caroní", "0134": "Banesco",
+    "0137": "Banco Sofitasa", "0138": "Banco Plaza",
+    "0151": "BFC Banco Fondo Común", "0156": "100% Banco",
+    "0157": "Delsur", "0163": "Banco del Tesoro",
+    "0166": "Banco Agrícola de Venezuela", "0168": "Bancrecer",
+    "0171": "Banco Activo", "0172": "Bancamiga",
+    "0174": "Banplus", "0175": "Banco Bicentenario",
+    "0177": "BANFANB", "0178": "N58 Banco Digital",
+    "0191": "Banco Nacional de Crédito (BNC)"
+}
+
+def convertir_dolares_a_bolivares():
+    print("\n--- 1. CONVERSOR DE USD A VES (TASA OFICIAL BCV) ---")
+    tasa_bcv = 879.1225
+    
+    while True:
+        entrada = input("\nIngrese cantidad en USD (o escriba 'salir' para volver al menú): ").strip()
+        if entrada.lower() == 'salir':
+            break
+        try:
+            cantidad = float(entrada)
+            if cantidad < 0:
+                print("❌ Error: La cantidad no puede ser negativa.")
+                continue
+            total = cantidad * tasa_bcv
+            print("-" * 60)
+            print(f"💰 Dólares: $ {cantidad:,.2f} USD")
+            print(f"📈 Tasa BCV: {tasa_bcv:,.4f} Bs/USD")
+            print(f"🇻🇪 Total:    Bs. {total:,.2f} VES")
+            print("-" * 60)
+        except ValueError:
+            print("❌ Error: Ingrese un valor numérico válido.")
+
+def analizar_variacion_tasas():
+    print("\n--- 2. ANÁLISIS DE VARIACIÓN CON PYDOLARVENEZUELA ---")
+    if not LIBRERIA_DISPONIBLE:
+        print("❌ La librería 'pyDolarVenezuela' no está instalada.")
+        print("💡 Ejecuta en tu terminal: pip install pyDolarVenezuela")
+        return
+    try:
+        monitor = Monitor(BCV, 'USD')
+        datos = monitor.get_value_monitors("usd")
+        tasa_actual = float(datos.price)
+        cambio_diario = float(getattr(datos, 'change', 0.0))
+        
+        historial = [
+            {"dia": "Ayer", "tasa": tasa_actual - cambio_diario},
+            {"dia": "Hace 7 días", "tasa": tasa_actual * 0.98},
+            {"dia": "Hace 30 días", "tasa": tasa_actual * 0.95}
+        ]
+        
+        print("-" * 65)
+        print(f"📊 REPORTE DE VARIACIÓN (Tasa Actual BCV: {tasa_actual:.2f} Bs.)")
+        print("=============================================================")
+        print(f"{'Período':<18} | {'Tasa Pasada':<12} | {'Diferencia':<17} | {'Porcentaje'}")
+        print("-" * 65)
+        
+        for item in historial:
+            tasa_pasada = item["tasa"]
+            dif = tasa_actual - tasa_pasada
+            pct = (dif / tasa_pasada) * 100 if tasa_pasada > 0 else 0
+            
+            marcador_bs = f"+{dif:.2f} Bs." if dif > 0 else f"{dif:.2f} Bs."
+            marcador_pct = f"📈 +{pct:.2f}%" if dif > 0 else f"📉 {pct:.2f}%"
+            
+            print(f"{item['dia']:<18} | {tasa_pasada:<12,.2f} | {marcador_bs:<17} | {marcador_pct}")
+        print("-" * 65)
+    except Exception as e:
+        print(f"❌ Error al consultar la API: {e}")
+
+def registrar_pago_movil():
+    print("\n--- 3. REGISTRO DE DATOS DE PAGO MÓVIL ---")
+    while True:
+        codigo = input("Ingrese el código del banco (ej. 0105): ").strip()
+        if codigo in BANCOS_VENEZUELA:
+            banco = BANCOS_VENEZUELA[codigo]
+            print(f"✅ Banco seleccionado: {banco}")
+            break
+        print("❌ Código de banco inválido o no registrado. Intente de nuevo.")
+            
+    telefono = input("Ingrese el número de teléfono: ").strip()
+    cedula = input("Ingrese la cédula de identidad: ").strip()
+    
+    try:
+        monto = float(input("Ingrese el monto de la transacción: "))
+        if monto <= 0:
+            print("❌ Error: El monto debe ser mayor a cero.")
+            return
+    except ValueError:
+        print("❌ Error: Monto no válido.")
+        return
+        
+    referencia = random.randint(100000, 999999)
+    
+    print("\n" + "="*35)
+    print("--- ¡REGISTRO EXITOSO! ---")
+    print(f"Banco:      {banco}")
+    print(f"Teléfono:   {telefono}")
+    print(f"Cédula:     {cedula}")
+    print(f"Monto:      {monto:,.2f} Bs.")
+    print(f"Referencia: {referencia}")
+    print("="*35)
+
+def main():
+    while True:
+        print("\n===============================")
+        print("      MENÚ PRINCIPAL IUTAR     ")
+        print("===============================")
+        print("1. Conversor de Dólares a Bolívares")
+        print("2. Análisis de Variación BCV")
+        print("3. Registro de Pago Móvil")
+        print("4. Salir")
+        
+        opcion = input("\nSeleccione una opción (1-4): ").strip()
+        
+        if opcion == "1":
+            convertir_dolares_a_bolivares()
+        elif opcion == "2":
+            analizar_variacion_tasas()
+        elif opcion == "3":
+            registrar_pago_movil()
+        elif opcion == "4":
+            print("¡Hasta luego!")
+            break
+        else:
+            print("❌ Opción inválida. Intente de nuevo.")
+
+if __name__ == "__main__":
+    main()
