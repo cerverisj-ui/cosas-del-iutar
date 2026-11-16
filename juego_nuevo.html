@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juego 3D Carros</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #87ceeb; font-family: Arial, sans-serif; }
+    canvas { display: block; }
+    #hud-top {
+      position: fixed; top: 15px; left: 15px;
+      background: rgba(20, 22, 28, 0.9); color: #ffd700;
+      padding: 12px 18px; border-radius: 8px; font-size: 18px; font-weight: bold;
+      border: 1px solid #ffd700; z-index: 10;
+    }
+    #hud-controls {
+      position: fixed; bottom: 15px; left: 15px;
+      background: rgba(20, 22, 28, 0.9); color: #f0f0f5;
+      padding: 12px 16px; border-radius: 8px; font-size: 14px; line-height: 1.6;
+      border: 1px solid #444; z-index: 10;
+    }
+    .key { color: #4da6ff; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="hud-top">Pista: Asfalto Urbano | Velocidad: 0 km/h</div>
+  <div id="hud-controls">
+    <div><span class="key">(W / Flecha Arriba)</span> Acelerar</div>
+    <div><span class="key">(S / Flecha Abajo)</span> Frenar</div>
+    <div><span class="key">(A / D / Flechas)</span> Girar</div>
+    <div><span class="key">(L)</span> Luces on / off</div>
+    <div><span class="key">(G)</span> Camara lenta</div>
+    <div><span class="key">(1 / 2 / 3)</span> Cambiar pista</div>
+    <div><span class="key">(R)</span> Reiniciar</div>
+  </div>
+  <canvas id="juego" width="1000" height="650"></canvas>
+
+  <script>
+    var canvas = document.getElementById("juego");
+    var ctx = canvas.getContext("2d");
+    var hudTop = document.getElementById("hud-top");
+
+    function ajustarPantalla() {
+      canvas.width = window.innerWidth || 1000;
+      canvas.height = window.innerHeight || 650;
+    }
+    window.addEventListener("resize", ajustarPantalla);
+    ajustarPantalla();
+
+    var pistaActual = {
+      nombre: "Asfalto Urbano",
+      cielo: "#87ceeb",
+      pasto1: "#2e8b57",
+      pasto2: "#227846",
+      via1: "#37373e",
+      via2: "#44444c",
+      borde1: "#dcdcdc",
+      borde2: "#b42828",
+      velMax: 190,
+      agarre: 1.0
+    };
+
+    var posZ = 0;
+    var velocidad = 0;
+    var carroX = 0;
+    var velX = 0;
+    var lucesOn = true;
+    var camaraLenta = false;
+    var tiempoAnim = 0;
+
+    var teclaW = false;
+    var teclaS = false;
+    var teclaA = false;
+    var teclaD = false;
+
+    window.addEventListener("keydown", function(e) {
+      var k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") teclaW = true;
+      if (k === "s" || e.key === "ArrowDown") teclaS = true;
+      if (k === "a" || e.key === "ArrowLeft") teclaA = true;
+      if (k === "d" || e.key === "ArrowRight") teclaD = true;
+
+      if (k === "1") {
+        pistaActual = { nombre: "Asfalto Urbano", cielo: "#87ceeb", pasto1: "#2e8b57", pasto2: "#227846", via1: "#37373e", via2: "#44444c", borde1: "#dcdcdc", borde2: "#b42828", velMax: 190, agarre: 1.0 };
+      }
+      if (k === "2") {
+        pistaActual = { nombre: "Rally de Tierra", cielo: "#d2b991", pasto1: "#a06e3c", pasto2: "#8c5f32", via1: "#7d5028", via2: "#6e4623", borde1: "#d2b48c", borde2: "#967350", velMax: 150, agarre: 0.65 };
+      }
+      if (k === "3") {
+        pistaActual = { nombre: "Pista de Hielo", cielo: "#c3d7eb", pasto1: "#ebf2fa", pasto2: "#d7e1f0", via1: "#b9d2eb", via2: "#aac6e1", borde1: "#6495ed", borde2: "#ffffff", velMax: 175, agarre: 0.35 };
+      }
+      if (k === "l") lucesOn = !lucesOn;
+      if (k === "g") camaraLenta = !camaraLenta;
+      if (k === "r") { velocidad = 0; carroX = 0; velX = 0; }
+    });
+
+    window.addEventListener("keyup", function(e) {
+      var k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") teclaW = false;
+      if (k === "s" || e.key === "ArrowDown") teclaS = false;
+      if (k === "a" || e.key === "ArrowLeft") teclaA = false;
+      if (k === "d" || e.key === "ArrowRight") teclaD = false;
+    });
+
+    function dibujarPoligono(x1, y1, x2, y2, x3, y3, x4, y4, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.lineTo(x4, y4);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function dibujarCarro(cx, cy, giro) {
+      var incl = giro * 9;
+      var rebote = velocidad > 5 ? Math.sin(tiempoAnim * 24) * 1.8 : 0;
+      var y = cy + rebote;
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.beginPath();
+      ctx.ellipse(cx, y + 58, 120, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#141416";
+      ctx.fillRect(cx - 110, y + 18, 32, 46);
+      ctx.fillRect(cx + 78, y + 18, 32, 46);
+      ctx.fillStyle = "#a5aab4";
+      ctx.fillRect(cx - 106, y + 25, 8, 30);
+      ctx.fillRect(cx + 98, y + 25, 8, 30);
+
+      dibujarPoligono(cx - 104, y + 44, cx + 104, y + 44, cx + 98, y + 5, cx - 98, y + 5, "#1e1e22");
+      dibujarPoligono(cx - 98, y + 5, cx + 98, y + 5, cx + 88, y - 16, cx - 88, y - 16, "#735c41");
+      dibujarPoligono(cx - 84 + incl, y - 16, cx + 84 + incl, y - 16, cx + 65 + incl, y - 64, cx - 65 + incl, y - 64, "#735c41");
+      dibujarPoligono(cx - 74 + incl, y - 19, cx + 74 + incl, y - 19, cx + 57 + incl, y - 56, cx - 57 + incl, y - 56, "#2d3e4e");
+
+      ctx.fillStyle = "#85858a";
+      ctx.fillRect(cx + 16 + incl, y - 37, 28, 17);
+      ctx.fillRect(cx - 44 + incl, y - 37, 28, 17);
+      ctx.fillStyle = "#9b9ba0";
+      ctx.fillRect(cx + 21 + incl, y - 47, 18, 9);
+      ctx.fillRect(cx - 39 + incl, y - 47, 18, 9);
+
+      var px = cx - 30 + incl + giro * 4;
+      ctx.fillStyle = "#c32328";
+      ctx.beginPath();
+      ctx.ellipse(px, y - 28, 16, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#e1b491";
+      ctx.beginPath();
+      ctx.arc(px, y - 45, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#231914";
+      ctx.beginPath();
+      ctx.arc(px, y - 47, 9, Math.PI, 0);
+      ctx.fill();
+
+      ctx.strokeStyle = "#141414";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(px, y - 33, 11, Math.PI, 0);
+      ctx.stroke();
+
+      ctx.fillStyle = "#141416";
+      ctx.fillRect(cx - 88, y - 24, 176, 7);
+      ctx.fillRect(cx - 72, y - 18, 8, 6);
+      ctx.fillRect(cx + 64, y - 18, 8, 6);
+
+      ctx.fillStyle = lucesOn ? "#ff1e1e" : "#780f0f";
+      ctx.fillRect(cx - 94, y + 6, 44, 14);
+      ctx.fillRect(cx + 50, y + 6, 44, 14);
+      ctx.fillStyle = lucesOn ? "#ffaa28" : "#8c5a14";
+      ctx.fillRect(cx - 94, y + 14, 18, 6);
+      ctx.fillRect(cx + 76, y + 14, 18, 6);
+
+      ctx.fillStyle = "#ebebeb";
+      ctx.fillRect(cx - 22, y + 12, 44, 14);
+      ctx.fillStyle = "#8c8c92";
+      ctx.beginPath();
+      ctx.arc(cx - 64, y + 45, 6, 0, Math.PI * 2);
+      ctx.arc(cx - 50, y + 45, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#735c41";
+      ctx.fillRect(cx - 106, y - 14, 14, 9);
+      ctx.fillRect(cx + 92, y - 14, 14, 9);
+    }
+
+    var ultimoTiempo = Date.now();
+
+    function animar() {
+      var ahora = Date.now();
+      var dt = (ahora - ultimoTiempo) / 1000;
+      ultimoTiempo = ahora;
+      if (dt > 0.1) dt = 0.1;
+      if (camaraLenta) dt = dt * 0.35;
+      tiempoAnim += dt;
+
+      var W = canvas.width;
+      var H = canvas.height;
+      var horizonteY = Math.floor(H * 0.46);
+
+      var acel = (teclaW ? 1 : 0) - (teclaS ? 1 : 0);
+      var giro = (teclaD ? 1 : 0) - (teclaA ? 1 : 0);
+
+      if (acel > 0) velocidad = Math.min(pistaActual.velMax, velocidad + 90 * dt);
+      else if (acel < 0) velocidad = Math.max(0, velocidad - 150 * dt);
+      else velocidad = Math.max(0, velocidad - 45 * dt);
+
+      velX += giro * 2.8 * pistaActual.agarre * dt;
+      velX *= Math.pow(0.02, pistaActual.agarre * dt);
+      if (velocidad > 2) carroX += velX * (velocidad / 100) * dt * 2.4;
+      carroX = Math.max(-1.15, Math.min(1.15, carroX));
+      posZ += velocidad * dt * 4.5;
+
+      ctx.fillStyle = pistaActual.cielo;
+      ctx.fillRect(0, 0, W, horizonteY);
+
+      var numFranjas = H - horizonteY;
+      for (var y = 0; y < numFranjas; y++) {
+        var py = horizonteY + y;
+        var prof = (y + 1) / numFranjas;
+        var zMundo = (1.0 / prof) * 18.0 + posZ;
+        var alterna = Math.floor(zMundo * 0.4) % 2 === 0;
+
+        ctx.fillStyle = alterna ? pistaActual.pasto1 : pistaActual.pasto2;
+        ctx.fillRect(0, py, W, 1);
+
+        var anchoVia = 50 + prof * (W * 0.65);
+        var centroX = W / 2 - carroX * prof * (W * 0.28);
+
+        var anchoBorde = 6 + prof * 26;
+        ctx.fillStyle = alterna ? pistaActual.borde1 : pistaActual.borde2;
+        ctx.fillRect(centroX - anchoVia / 2 - anchoBorde, py, anchoVia + anchoBorde * 2, 1);
+
+        ctx.fillStyle = alterna ? pistaActual.via1 : pistaActual.via2;
+        ctx.fillRect(centroX - anchoVia / 2, py, anchoVia, 1);
+
+        if (alterna) {
+          var anchoLinea = Math.max(2, prof * 10);
+          ctx.fillStyle = "#f0c828";
+          ctx.fillRect(centroX - anchoLinea, py, anchoLinea * 2, 1);
+        }
+      }
+
+      for (var i = 18; i >= 1; i--) {
+        var zEdif = i * 40 - (posZ % 40);
+        if (zEdif > 8) {
+          var esc = 18.0 / zEdif;
+          var pyE = horizonteY + esc * numFranjas;
+          var anchoViaE = 50 + esc * (W * 0.65);
+          var centroXE = W / 2 - carroX * esc * (W * 0.28);
+          var bw = Math.max(12, 150 * esc);
+          var bh = Math.max(20, 210 * esc);
+
+          ctx.fillStyle = "#4682b4";
+          ctx.fillRect(centroXE - anchoViaE / 2 - 130 * esc - bw / 2, pyE - bh, bw, bh);
+          ctx.strokeStyle = "#1e1e24";
+          ctx.strokeRect(centroXE - anchoViaE / 2 - 130 * esc - bw / 2, pyE - bh, bw, bh);
+
+          ctx.fillStyle = "#b4a08c";
+          ctx.fillRect(centroXE + anchoViaE / 2 + 130 * esc - bw / 2, pyE - bh * 1.15, bw, bh * 1.15);
+          ctx.strokeRect(centroXE + anchoViaE / 2 + 130 * esc - bw / 2, pyE - bh * 1.15, bw, bh * 1.15);
+        }
+      }
+
+      dibujarCarro(W / 2, H - 125, giro);
+
+      hudTop.textContent = "Pista: " + pistaActual.nombre + "   |   Velocidad: " + Math.round(velocidad) + " km/h";
