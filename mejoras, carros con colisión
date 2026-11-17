@@ -1,0 +1,208 @@
+import math, random, tkinter as tk, traceback
+
+W, H = 900, 600
+PISTAS = {
+    "1": ("Autopista Nocturna", "#101828", "#2b3a55", "#182c25", "#262930", 280.0, 1.0),
+    "2": ("Circuito Costero", "#4da6ff", "#b3d9ff", "#2e8b57", "#383b42", 265.0, 0.95),
+    "3": ("Ruta Alpina Nieve", "#8faec9", "#d9e6f2", "#e6eef5", "#9db4c7", 225.0, 0.42),
+}
+
+def obtener_auto(idx):
+    mod = idx % 5
+    if mod == 0:
+        return ("Ferrari SF90", "#d40000", "#ff4d4d", "#7a0000", "#ffcc00", "ferrari")
+    if mod == 1:
+        return ("Lamborghini SVJ", "#52b318", "#8ce645", "#2c6609", "#ffffff", "lambo")
+    if mod == 2:
+        return ("BMW M4 Comp", "#00665e", "#1aa398", "#003833", "#e6e6e6", "bmw")
+    if mod == 3:
+        return ("Porsche 911 GT3", "#f5c400", "#ffe066", "#b38f00", "#111111", "porsche")
+    return ("Bugatti Chiron", "#0047b3", "#3385ff", "#002666", "#00ccff", "bugatti")
+
+st = {
+    "p": "1", "car": 0, "z": 0.0, "v": 0.0, "x": 0.0, "vx": 0.0,
+    "luz": True, "lenta": False, "t": 0.0,
+    "volcado": False, "choque_timer": 0.0, "puntos": 0
+}
+teclas = set()
+trafico = [
+    {"z": 240.0, "x": -0.45, "v": 85.0, "c": "#c0c5ce"},
+    {"z": 540.0, "x": 0.45, "v": 95.0, "c": "#2b303a"},
+    {"z": 840.0, "x": 0.0, "v": 80.0, "c": "#b83227"},
+]
+
+root = tk.Tk()
+root.title("Superdeportivos 3D - Fisica de Choques")
+root.resizable(False, False)
+cv = tk.Canvas(root, width=W, height=H, bg="#101828", highlightthickness=0)
+cv.pack()
+
+
+def k_down(e):
+    k = e.keysym.lower()
+    teclas.add(k)
+    if k in PISTAS:
+        st["p"] = k
+    elif k == "c":
+        st["car"] = st.get("car") + 1
+    elif k == "l":
+        st["luz"] = not st.get("luz")
+    elif k == "g":
+        st["lenta"] = not st.get("lenta")
+    elif k == "r":
+        st["v"], st["x"], st["vx"], st["volcado"], st["choque_timer"] = 0.0, 0.0, 0.0, False, 0.0
+
+
+def k_up(e):
+    teclas.discard(e.keysym.lower())
+
+
+root.bind("<KeyPress>", k_down)
+root.bind("<KeyRelease>", k_up)
+
+
+def dibujar_auto(cx, cy, giro):
+    nombre, col, bri, som, casco, tipo = obtener_auto(st.get("car"))
+    inc = giro * 10
+    y = cy + (math.sin(st.get("t") * 28) * 1.4 if st.get("v") > 10 else 0)
+    led = "#ff1a1a" if st.get("luz") else "#660a0a"
+    cab = "#16181d" if tipo == "bugatti" else col
+
+    if st.get("volcado"):
+        cv.create_oval(cx - 140, y + 32, cx + 140, y + 66, fill="#0b0c0e", outline="")
+        cv.create_polygon(cx - 84, y + 22, cx + 84, y + 22, cx + 62, y + 52, cx - 62, y + 52, fill=som, outline="")
+        cv.create_polygon(cx - 118, y - 4, cx + 118, y - 4, cx + 104, y + 26, cx - 104, y + 26, fill=col, outline="")
+        cv.create_polygon(cx - 110, y - 22, cx + 110, y - 22, cx + 118, y - 4, cx - 118, y - 4, fill="#1e2229", outline="")
+        cv.create_rectangle(cx - 122, y - 38, cx - 86, y + 4, fill="#111214", outline="#333")
+        cv.create_rectangle(cx + 86, y - 38, cx + 122, y + 4, fill="#111214", outline="#333")
+        humo_x = math.sin(st.get("t") * 8) * 15
+        cv.create_oval(cx - 45 + humo_x, y - 65, cx + 15 + humo_x, y - 25, fill="#555b66", outline="")
+        cv.create_oval(cx - 15 - humo_x, y - 85, cx + 55 - humo_x, y - 40, fill="#6e7582", outline="")
+        return nombre
+
+    cv.create_oval(cx - 135, y + 36, cx + 135, y + 66, fill="#0b0c0e", outline="")
+    cv.create_rectangle(cx - 122, y + 14, cx - 86, y + 56, fill="#111214", outline="")
+    cv.create_rectangle(cx + 86, y + 14, cx + 122, y + 56, fill="#111214", outline="")
+    cv.create_polygon(cx - 114, y + 44, cx + 114, y + 44, cx + 106, y + 20, cx - 106, y + 20, fill="#181a1f", outline="")
+
+    cv.create_polygon(cx - 118, y + 22, cx + 118, y + 22, cx + 104, y - 12, cx - 104, y - 12, fill=col, outline="")
+    cv.create_polygon(cx - 100, y - 12, cx + 100, y - 12, cx + 85, y - 21, cx - 85, y - 21, fill=bri, outline="")
+    if tipo == "bugatti":
+        cv.create_polygon(cx - 54, y + 22, cx + 54, y + 22, cx + 46, y - 21, cx - 46, y - 21, fill="#16181d", outline="")
+
+    cv.create_polygon(cx - 84 + inc, y - 18, cx + 84 + inc, y - 18, cx + 62 + inc, y - 54, cx - 62 + inc, y - 54, fill=som, outline="")
+    cv.create_polygon(cx - 78 + inc, y - 18, cx + 78 + inc, y - 18, cx + 58 + inc, y - 51, cx - 58 + inc, y - 51, fill=cab, outline="")
+    cv.create_polygon(cx - 68 + inc, y - 21, cx + 68 + inc, y - 21, cx + 50 + inc, y - 47, cx - 50 + inc, y - 47, fill="#1c2633", outline="")
+
+    px = cx - 26 + inc + giro * 5
+    cv.create_oval(px - 13, y - 33, px + 13, y - 19, fill="#22252a", outline="")
+    cv.create_oval(px - 8, y - 45, px + 8, y - 30, fill=casco, outline="#111")
+
+    if tipo in ("porsche", "lambo", "bmw"):
+        ay = y - 33 if tipo == "porsche" else y - 29
+        cv.create_rectangle(cx - 98 + inc // 2, ay, cx + 98 + inc // 2, ay + 6, fill="#14161a", outline="")
+        cv.create_rectangle(cx - 64, ay + 6, cx - 58, y - 15, fill="#14161a", outline="")
+        cv.create_rectangle(cx + 58, ay + 6, cx + 64, y - 15, fill="#14161a", outline="")
+
+    if tipo in ("porsche", "bugatti"):
+        cv.create_rectangle(cx - 106, y - 3, cx + 106, y + 3, fill=led, outline="")
+    elif tipo == "ferrari":
+        cv.create_oval(cx - 101, y - 5, cx - 83, y + 7, fill=led, outline="")
+        cv.create_oval(cx - 73, y - 5, cx - 55, y + 7, fill=led, outline="")
+        cv.create_oval(cx + 55, y - 5, cx + 73, y + 7, fill=led, outline="")
+        cv.create_oval(cx + 83, y - 5, cx + 101, y + 7, fill=led, outline="")
+    else:
+        cv.create_rectangle(cx - 100, y - 3, cx - 52, y + 5, fill=led, outline="")
+        cv.create_rectangle(cx + 52, y - 3, cx + 100, y + 5, fill=led, outline="")
+
+    cv.create_oval(cx - 72, y + 28, cx - 60, y + 40, fill="#b0b8c4", outline="#222")
+    cv.create_oval(cx - 56, y + 28, cx - 44, y + 40, fill="#b0b8c4", outline="#222")
+    cv.create_oval(cx + 44, y + 28, cx + 56, y + 40, fill="#b0b8c4", outline="#222")
+    cv.create_oval(cx + 60, y + 28, cx + 72, y + 40, fill="#b0b8c4", outline="#222")
+
+    if st.get("choque_timer") > 0:
+        for _ in range(8):
+            sx = cx + random.randint(-120, 120)
+            sy = y + random.randint(-20, 45)
+            cv.create_oval(sx - 4, sy - 4, sx + 4, sy + 4, fill="#ffcc00", outline="#ff4400")
+
+    return nombre
+
+
+def loop():
+    dt = 0.016 * (0.35 if st.get("lenta") else 1.0)
+    st["t"] = st.get("t") + dt
+    if st.get("choque_timer") > 0:
+        st["choque_timer"] = max(0.0, st.get("choque_timer") - dt)
+
+    nom_p, cielo, hor, pasto, via, vmax, agarre = PISTAS.get(st.get("p"))
+    hy = int(H * 0.44)
+
+    if st.get("volcado"):
+        st["v"] = max(0.0, st.get("v") - 120 * dt)
+        giro = 0
+    else:
+        acel = (1 if "w" in teclas or "up" in teclas else 0) - (1 if "s" in teclas or "down" in teclas else 0)
+        giro = (1 if "d" in teclas or "right" in teclas else 0) - (1 if "a" in teclas or "left" in teclas else 0)
+        st["v"] = max(0.0, min(vmax, st.get("v") + (115 * dt if acel > 0 else (-180 * dt if acel < 0 else -50 * dt))))
+        st["vx"] = (st.get("vx") + giro * 3.1 * agarre * dt) * math.pow(0.02, agarre * dt)
+        if st.get("v") > 2:
+            st["x"] = max(-1.1, min(1.1, st.get("x") + st.get("vx") * (st.get("v") / 110.0) * dt * 2.4))
+
+    st["z"] = st.get("z") + st.get("v") * dt * 5.2
+
+    cv.delete("all")
+    cv.create_rectangle(0, 0, W, hy - 35, fill=cielo, outline="")
+    cv.create_rectangle(0, hy - 35, W, hy, fill=hor, outline="")
+
+    nf = H - hy
+    for y in range(0, nf, 4):
+        py = hy + y
+        pr = (y + 1) / float(nf)
+        alt = int(((1.0 / pr) * 18.0 + st.get("z")) * 0.4) % 2 == 0
+        cv.create_rectangle(0, py, W, py + 4, fill=pasto if alt else "#13221d", outline="")
+        av = 48 + pr * (W * 0.68)
+        cx = W / 2 - st.get("x") * pr * (W * 0.28)
+        borde = 6 + pr * 22
+        cv.create_rectangle(cx - av / 2 - borde, py, cx + av / 2 + borde, py + 4, fill="#d9dde6" if alt else "#b82525", outline="")
+        cv.create_rectangle(cx - av / 2, py, cx + av / 2, py + 4, fill=via if alt else "#323640", outline="")
+        if alt:
+            lw = max(2, pr * 6)
+            cv.create_rectangle(cx - av * 0.17 - lw, py, cx - av * 0.17 + lw, py + 4, fill="#e6ecf5", outline="")
+            cv.create_rectangle(cx + av * 0.17 - lw, py, cx + av * 0.17 + lw, py + 4, fill="#e6ecf5", outline="")
+
+    for i in range(14, 0, -1):
+        ze = i * 45 - (st.get("z") % 45)
+        if ze > 8:
+            esc = 18.0 / ze
+            pye = hy + esc * nf
+            avia = 48 + esc * (W * 0.68)
+            cx = W / 2 - st.get("x") * esc * (W * 0.28)
+            bw, bh = max(14, 150 * esc), max(24, 230 * esc)
+            cv.create_rectangle(cx - avia / 2 - 140 * esc - bw / 2, pye - bh, cx - avia / 2 - 140 * esc + bw / 2, pye, fill="#1e2d42", outline="#0f1722")
+            cv.create_rectangle(cx + avia / 2 + 140 * esc - bw / 2, pye - bh * 1.15, cx + avia / 2 + 140 * esc + bw / 2, pye, fill="#2c3545", outline="#141820")
+
+    for a in trafico:
+        a["z"] = a.get("z") + a.get("v") * dt * 5.2
+        if a.get("z") - st.get("z") < -20:
+            a["z"], a["x"] = st.get("z") + random.uniform(450, 800), random.choice([-0.55, 0.0, 0.55])
+            if not st.get("volcado"):
+                st["puntos"] = st.get("puntos") + 100
+
+        rz = a.get("z") - st.get("z")
+
+        if 12 <= rz <= 34 and abs(st.get("x") - a.get("x")) < 0.34 and not st.get("volcado"):
+            a["z"] = st.get("z") + random.uniform(450, 750)
+            st["choque_timer"] = 0.6
+            if st.get("v") >= 175.0:
+                st["volcado"] = True
+                st["v"] = st.get("v") * 0.55
+            else:
+                st["v"] = st.get("v") * 0.35
+                st["vx"] = 1.8 if st.get("x") >= a.get("x") else -1.8
+
+        if 8 < rz < 440:
+            esc = 18.0 / rz
+            py = hy + esc * nf
+            avia = 48 + esc * (W * 0.68)
+            px = (W / 2 - st.get("x") * esc * (W * 0.28)) + a.get("x") * (avia * 0.42)
