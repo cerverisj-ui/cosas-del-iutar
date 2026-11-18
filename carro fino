@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juego 3D Carros - Edición GT</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', Arial, sans-serif; }
+    canvas { display: block; }
+    #hud-top {
+      position: fixed; top: 15px; left: 15px;
+      background: rgba(15, 18, 25, 0.88); color: #ffd700;
+      padding: 12px 20px; border-radius: 10px; font-size: 17px; font-weight: bold;
+      border: 1px solid rgba(255, 215, 0, 0.5); z-index: 10;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    #hud-controls {
+      position: fixed; bottom: 15px; left: 15px;
+      background: rgba(15, 18, 25, 0.85); color: #f0f0f5;
+      padding: 12px 16px; border-radius: 10px; font-size: 13px; line-height: 1.65;
+      border: 1px solid rgba(255,255,255,0.15); z-index: 10;
+      backdrop-filter: blur(4px);
+    }
+    #map-selector {
+      position: fixed; top: 15px; right: 15px;
+      display: flex; gap: 6px; flex-wrap: wrap; max-width: 340px; justify-content: flex-end; z-index: 10;
+    }
+    .map-btn {
+      background: rgba(15, 18, 25, 0.85); color: #ddd; border: 1px solid #444;
+      padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
+      transition: 0.2s;
+    }
+    .map-btn:hover, .map-btn.active {
+      background: #ffd700; color: #111; border-color: #ffd700;
+    }
+    .key { color: #4da6ff; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="hud-top">Pista: Asfalto Urbano | Velocidad: 0 km/h</div>
+  
+  <div id="map-selector">
+    <button class="map-btn active" onclick="cambiarPista(0)">1. Ciudad</button>
+    <button class="map-btn" onclick="cambiarPista(1)">2. Rally</button>
+    <button class="map-btn" onclick="cambiarPista(2)">3. Hielo</button>
+    <button class="map-btn" onclick="cambiarPista(3)">4. Noche Neón</button>
+    <button class="map-btn" onclick="cambiarPista(4)">5. Costa</button>
+    <button class="map-btn" onclick="cambiarPista(5)">6. Volcán</button>
+  </div>
+
+  <div id="hud-controls">
+    <div><span class="key">(W / ↑)</span> Acelerar &nbsp;|&nbsp; <span class="key">(Espacio)</span> Nitro</div>
+    <div><span class="key">(S / ↓)</span> Frenar &nbsp;|&nbsp; <span class="key">(A / D / ← →)</span> Girar</div>
+    <div><span class="key">(1 - 6)</span> Cambiar mapa</div>
+    <div><span class="key">(C)</span> Color del carro &nbsp;|&nbsp; <span class="key">(L)</span> Luces</div>
+    <div><span class="key">(G)</span> Cámara lenta &nbsp;|&nbsp; <span class="key">(R)</span> Reiniciar</div>
+  </div>
+
+  <canvas id="juego"></canvas>
+
+  <script>
+    var canvas = document.getElementById("juego");
+    var ctx = canvas.getContext("2d");
+    var hudTop = document.getElementById("hud-top");
+    var botonesMapa = document.querySelectorAll(".map-btn");
+
+    function ajustarPantalla() {
+      canvas.width = window.innerWidth || 1000;
+      canvas.height = window.innerHeight || 650;
+    }
+    window.addEventListener("resize", ajustarPantalla);
+    ajustarPantalla();
+
+    // DEFINICIÓN DE LOS 6 MAPAS
+    var mapas = [
+      {
+        nombre: "Asfalto Urbano",
+        cieloTop: "#2980b9", cieloBot: "#87ceeb",
+        pasto1: "#2e8b57", pasto2: "#247347",
+        via1: "#33333a", via2: "#3e3e46",
+        borde1: "#e6e6e6", borde2: "#c0392b",
+        linea: "#f1c40f",
+        velMax: 210, agarre: 1.0,
+        tipoDecoracion: "ciudad", oscuro: false, polvo: "rgba(200,200,200,0.25)"
+      },
+      {
+        nombre: "Rally de Tierra",
+        cieloTop: "#b8860b", cieloBot: "#edd19c",
+        pasto1: "#b57c43", pasto2: "#9e6934",
+        via1: "#7d5028", via2: "#6e4623",
+        borde1: "#d2b48c", borde2: "#8b4513",
+        linea: "#e0c097",
+        velMax: 175, agarre: 0.68,
+        tipoDecoracion: "desierto", oscuro: false, polvo: "rgba(195, 145, 90, 0.55)"
+      },
+      {
+        nombre: "Pista de Hielo",
+        cieloTop: "#5f9ea0", cieloBot: "#d6eaf8",
+        pasto1: "#eaf2f8", pasto2: "#d4e6f1",
+        via1: "#a9cce3", via2: "#9ac0d9",
+        borde1: "#3498db", borde2: "#ffffff",
+        linea: "#ffffff",
+        velMax: 195, agarre: 0.35,
+        tipoDecoracion: "nieve", oscuro: false, polvo: "rgba(240, 250, 255, 0.6)"
+      },
+      {
+        nombre: "Autopista Nocturna",
+        cieloTop: "#050510", cieloBot: "#1a103c",
+        pasto1: "#0d0d1a", pasto2: "#121224",
+        via1: "#181822", via2: "#20202d",
+        borde1: "#00f3ff", borde2: "#ff007f",
+        linea: "#00f3ff",
+        velMax: 240, agarre: 1.05,
+        tipoDecoracion: "neon", oscuro: true, polvo: "rgba(0, 243, 255, 0.3)"
+      },
+      {
+        nombre: "Costa al Atardecer",
+        cieloTop: "#4a154b", cieloBot: "#ff7e5f",
+        pasto1: "#f4d03f", pasto2: "#e5c130",
+        via1: "#3b3b42", via2: "#46464f",
+        borde1: "#ffffff", borde2: "#ff6b6b",
+        linea: "#ffeaa7",
+        velMax: 205, agarre: 0.95,
+        tipoDecoracion: "playa", oscuro: false, polvo: "rgba(244, 208, 63, 0.4)"
+      },
+      {
+        nombre: "Circuito Volcánico",
+        cieloTop: "#1a0500", cieloBot: "#6e1400",
+        pasto1: "#26120e", pasto2: "#1c0c09",
+        via1: "#2b2625", via2: "#36302f",
+        borde1: "#ff4500", borde2: "#ffae00",
+        linea: "#ff5500",
+        velMax: 225, agarre: 0.85,
+        tipoDecoracion: "volcan", oscuro: true, polvo: "rgba(255, 100, 20, 0.45)"
+      }
+    ];
+
+    var indicePista = 0;
+    var pistaActual = mapas[0];
+
+    // Colores personalizables para el superdeportivo
+    var coloresCarro = [
+      { base: "#d91e2a", claro: "#ff4d5a", oscuro: "#7a0c14" }, // Rojo Ferrari
+      { base: "#0077ff", claro: "#5ca8ff", oscuro: "#003b80" }, // Azul Eléctrico
+      { base: "#f39c12", claro: "#ffd166", oscuro: "#9c6000" }, // Amarillo Lamborghini
+      { base: "#1abc9c", claro: "#6ef7dc", oscuro: "#0d6654" }, // Verde Esmeralda
+      { base: "#e0e0e0", claro: "#ffffff", oscuro: "#8c8c8c" }, // Blanco Perla
+      { base: "#2c2c34", claro: "#555563", oscuro: "#111116" }  // Negro Mate
+    ];
+    var indiceColor = 0;
+
+    function cambiarPista(idx) {
+      if (idx >= 0 && idx < mapas.length) {
+        indicePista = idx;
+        pistaActual = mapas[idx];
+        botonesMapa.forEach((b, i) => b.classList.toggle("active", i === idx));
+      }
+    }
+
+    var posZ = 0;
+    var velocidad = 0;
+    var carroX = 0;
+    var velX = 0;
+    var lucesOn = true;
+    var camaraLenta = false;
+    var tiempoAnim = 0;
+    var particulas = [];
+
+    var teclaW = false, teclaS = false, teclaA = false, teclaD = false, teclaNitro = false;
+
+    window.addEventListener("keydown", function(e) {
+      var k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") teclaW = true;
+      if (k === "s" || e.key === "ArrowDown") teclaS = true;
+      if (k === "a" || e.key === "ArrowLeft") teclaA = true;
+      if (k === "d" || e.key === "ArrowRight") teclaD = true;
+      if (e.code === "Space") teclaNitro = true;
+
+      if (k >= "1" && k <= "6") cambiarPista(parseInt(k) - 1);
+      if (k === "c") indiceColor = (indiceColor + 1) % coloresCarro.length;
+      if (k === "l") lucesOn = !lucesOn;
+      if (k === "g") camaraLenta = !camaraLenta;
+      if (k === "r") { velocidad = 0; carroX = 0; velX = 0; particulas = []; }
+    });
+
+    window.addEventListener("keyup", function(e) {
+      var k = e.key.toLowerCase();
+      if (k === "w" || e.key === "ArrowUp") teclaW = false;
+      if (k === "s" || e.key === "ArrowDown") teclaS = false;
+      if (k === "a" || e.key === "ArrowLeft") teclaA = false;
+      if (k === "d" || e.key === "ArrowRight") teclaD = false;
+      if (e.code === "Space") teclaNitro = false;
+    });
+
+    function dibujarPoligono(puntos, color, bordeColor, grosorBorde) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(puntos[0][0], puntos[0][1]);
+      for (var i = 1; i < puntos.length; i++) {
+        ctx.lineTo(puntos[i][0], puntos[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+      if (bordeColor) {
+        ctx.strokeStyle = bordeColor;
+        ctx.lineWidth = grosorBorde || 1.5;
+        ctx.stroke();
+      }
+    }
+
+    // SISTEMA DE PARTÍCULAS (Humo, polvo, chispas)
+    function actualizarYRegistrarParticulas(cx, cy, dt, frenando) {
+      if (velocidad > 25 && (Math.abs(velX) > 0.25 || frenando || pistaActual.nombre === "Rally de Tierra" || teclaNitro)) {
+        for (var lado of [-92, 92]) {
+          if (Math.random() < 0.65) {
+            particulas.push({
+              x: cx + lado + (Math.random() * 14 - 7),
+              y: cy + 54,
+              vx: (Math.random() - 0.5) * 45 - velX * 30,
+              vy: 20 + Math.random() * 35,
+              radio: 5 + Math.random() * 7,
+              vida: 1.0,
+              color: teclaNitro ? "rgba(0, 200, 255, 0.5)" : pistaActual.polvo
+            });
+          }
+        }
+      }
+
+      for (var i = particulas.length - 1; i >= 0; i--) {
+        var p = particulas[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.radio += 18 * dt;
+        p.vida -= 2.2 * dt;
+        if (p.vida <= 0) {
+          particulas.splice(i, 1);
+        } else {
+          ctx.save();
+          ctx.globalAlpha = p.vida;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radio, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    // SUPERDEPORTIVO GT MEJORADO
+    function dibujarCarro(cx, cy, giro, frenando) {
+      var color = coloresCarro[indiceColor];
+      var incl = giro * 11; // Inclinación de suspensión en curvas
+      var rebote = velocidad > 5 ? Math.sin(tiempoAnim * 28) * (1.2 + velocidad / 140) : 0;
+      var y = cy + rebote;
+
+      ctx.save();
+
+      // 0. Haz de luz delantero en pistas oscuras
+      if (lucesOn && pistaActual.oscuro) {
+        var gradLuz = ctx.createLinearGradient(cx, y, cx + giro * 120, y - 260);
+        gradLuz.addColorStop(0, "rgba(255, 250, 210, 0.35)");
+        gradLuz.addColorStop(1, "rgba(255, 250, 210, 0)");
+        dibujarPoligono([
+          [cx - 85, y + 10],
+          [cx + 85, y + 10],
+          [cx + 260 + giro * 140, y - 250],
+          [cx - 260 + giro * 140, y - 250]
+        ], gradLuz);
+      }
+
+      // 1. Sombra realista bajo el chasis
+      ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+      ctx.beginPath();
+      ctx.ellipse(cx + giro * 5, y + 60, 132, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Neumáticos anchos deportivos con inclinación visual
+      var offsetRueda = giro * 6;
+      // Rueda Izquierda
+      dibujarPoligono([
+        [cx - 118 + offsetRueda, y + 14],
+        [cx - 82 + offsetRueda, y + 14],
+        [cx - 80, y + 62],
+        [cx - 116, y + 62]
+      ], "#121215", "#000", 1);
+      // Banda de rodadura / dibujo de llanta
+      ctx.fillStyle = "#26262c";
+      ctx.fillRect(cx - 110 + offsetRueda * 0.5, y + 20, 6, 36);
+      ctx.fillRect(cx - 96 + offsetRueda * 0.5, y + 20, 6, 36);
+
+      // Rueda Derecha
+      dibujarPoligono([
+        [cx + 82 + offsetRueda, y + 14],
+        [cx + 118 + offsetRueda, y + 14],
+        [cx + 116, y + 62],
+        [cx + 80, y + 62]
+      ], "#121215", "#000", 1);
+      ctx.fillStyle = "#26262c";
+      ctx.fillRect(cx + 90 + offsetRueda * 0.5, y + 20, 6, 36);
+      ctx.fillRect(cx + 104 + offsetRueda * 0.5, y + 20, 6, 36);
+
+      // 3. Difusor trasero de fibra de carbono (parte inferior)
+      dibujarPoligono([
+        [cx - 106, y + 46],
+        [cx + 106, y + 46],
+        [cx + 98, y + 22],
+        [cx - 98, y + 22]
+      ], "#18181d", "#0c0c0f", 2);
+
+      // Aletas aerodinámicas del difusor
+      ctx.fillStyle = "#0d0d10";
+      for (var ax = -65; ax <= 65; ax += 26) {
+        ctx.fillRect(cx + ax - 2, y + 24, 4, 22);
+      }
+
+      // 4. Cuatro tubos de escape cromados + fuego de Nitro
+      var escapes = [-82, -66, 66, 82];
+      escapes.forEach(function(ex) {
+        ctx.fillStyle = "#888c94";
+        ctx.beginPath();
+        ctx.arc(cx + ex, y + 36, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#111";
+        ctx.beginPath();
+        ctx.arc(cx + ex, y + 36, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Llamas al acelerar con Nitro o a máxima velocidad
+        if (teclaNitro || (teclaW && velocidad > pistaActual.velMax * 0.92 && Math.random() > 0.4)) {
+          ctx.save();
+          ctx.shadowColor = "#00d2ff";
+          ctx.shadowBlur = 15;
+          ctx.fillStyle = teclaNitro ? "#00f3ff" : "#ff7b00";
+          ctx.beginPath();
+          ctx.ellipse(cx + ex, y + 41, 5, 10 + Math.random() * 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(cx + ex, y + 38, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+
+      // 5. Carrocería trasera ancha (Guardabarros esculpidos con degradado metálico)
+      var gradCuerpo = ctx.createLinearGradient(cx, y - 22, cx, y + 25);
+      gradCuerpo.addColorStop(0, color.claro);
+      gradCuerpo.addColorStop(0.45, color.base);
+      gradCuerpo.addColorStop(1, color.oscuro);
+
+      dibujarPoligono([
+        [cx - 112, y + 24],
+        [cx + 112, y + 24],
+        [cx + 104 + incl * 0.3, y - 14],
+        [cx - 104 + incl * 0.3, y - 14]
+      ], gradCuerpo, "#111", 1.5);
+
+      // Rejillas laterales de ventilación del motor
+      dibujarPoligono([
+        [cx - 104, y + 14], [cx - 72, y + 14],
+        [cx - 76, y - 2], [cx - 100, y - 2]
+      ], "#15151a");
+      dibujarPoligono([
+        [cx + 72, y + 14], [cx + 104, y + 14],
+        [cx + 100, y - 2], [cx + 76, y - 2]
+      ], "#15151a");
+
+      // 6. Cabina aerodinámica y techo
+      dibujarPoligono([
+        [cx - 86 + incl * 0.5, y - 14],
+        [cx + 86 + incl * 0.5, y - 14],
+        [cx + 62 + incl, y - 62],
+        [cx - 62 + incl, y - 62]
+      ], gradCuerpo, "#111", 1.5);
+
+      // 7. Luneta trasera tintada con reflejo diagonal de cristal
+      var gradCristal = ctx.createLinearGradient(cx - 50, y - 58, cx + 50, y - 16);
+      gradCristal.addColorStop(0, "#101820");
+      gradCristal.addColorStop(0.5, "#233547");
+      gradCristal.addColorStop(1, "#0b1015");
+
+      dibujarPoligono([
+        [cx - 74 + incl * 0.55, y - 16],
+        [cx + 74 + incl * 0.55, y - 16],
+        [cx + 54 + incl * 0.95, y - 55],
+        [cx - 54 + incl * 0.95, y - 55]
+      ], gradCristal);
+
+      // Brillo diagonal sobre el vidrio trasero
+      dibujarPoligono([
+        [cx - 35 + incl * 0.8, y - 53],
+        [cx - 12 + incl * 0.8, y - 53],
+        [cx - 42 + incl * 0.6, y - 18],
+        [cx - 58 + incl * 0.6, y - 18]
+      ], "rgba(255, 255, 255, 0.16)");
+
+      // Silueta sutil del piloto y asientos deportivos dentro de la cabina
+      ctx.fillStyle = "rgba(10, 10, 14, 0.75)";
+      ctx.beginPath();
+      ctx.arc(cx - 26 + incl * 0.8 + giro * 4, y - 34, 9, 0, Math.PI * 2); // Casco piloto
+      ctx.fill();
+
+      // 8. Espejos retrovisores aerodinámicos
+      dibujarPoligono([
+        [cx - 98 + incl * 0.4, y - 16], [cx - 118 + incl * 0.4, y - 22],
+        [cx - 115 + incl * 0.4, y - 11], [cx - 96 + incl * 0.4, y - 9]
+      ], color.base, "#111", 1);
+      dibujarPoligono([
+        [cx + 98 + incl * 0.4, y - 16], [cx + 118 + incl * 0.4, y - 22],
+        [cx + 115 + incl * 0.4, y - 11], [cx + 96 + incl * 0.4, y - 9]
+      ], color.base, "#111", 1);
+
+      // 9. Alerón trasero GT de fibra de carbono
+      // Soportes del alerón
+      ctx.fillStyle = "#18181d";
+      ctx.fillRect(cx - 66 + incl * 0.5, y - 28, 7, 15);
+      ctx.fillRect(cx + 59 + incl * 0.5, y - 28, 7, 15);
+      // Ala principal
+      dibujarPoligono([
+        [cx - 102 + incl * 0.6, y - 31],
+        [cx + 102 + incl * 0.6, y - 31],
+        [cx + 96 + incl * 0.6, y - 24],
+        [cx - 96 + incl * 0.6, y - 24]
+      ], "#141418", "#000", 1);
+      // Placas laterales del alerón (Endplates)
+      ctx.fillStyle = color.base;
+      ctx.fillRect(cx - 104 + incl * 0.6, y - 36, 5, 16);
+      ctx.fillRect(cx + 99 + incl * 0.6, y - 36, 5, 16);
+
+      // 10. Luces traseras LED estilizadas con brillo neón
+      ctx.save();
+      if (lucesOn || frenando) {
+        ctx.shadowColor = frenando ? "#ff0000" : "#ff1e1e";
+        ctx.shadowBlur = frenando ? 24 : 14;
+      }
+      var colorLed = frenando ? "#ff3b3b" : (lucesOn ? "#ff1111" : "#5e0a0a");
+      
+      // Óptica izquierda LED
+      dibujarPoligono([
+        [cx - 98, y - 5], [cx - 48, y - 2],
+        [cx - 52, y + 6], [cx - 95, y + 5]
+      ], colorLed);
+      // Óptica derecha LED
+      dibujarPoligono([
+        [cx + 48, y - 2], [cx + 98, y - 5],
+        [cx + 95, y + 5], [cx + 52, y + 6]
+      ], colorLed);
+      // Tercera luz de freno central
+      ctx.fillRect(cx - 24 + incl * 0.9, y - 57, 48, 3);
+      ctx.restore();
+
+      // 11. Matrícula trasera con marco
+      ctx.fillStyle = "#111";
+      ctx.fillRect(cx - 24, y + 4, 48, 15);
+      ctx.fillStyle = "#f5f5f5";
+      ctx.fillRect(cx - 22, y + 6, 44, 11);
+      ctx.fillStyle = "#222";
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("GT-2026", cx, y + 14);
+
+      ctx.restore();
+    }
+
+    // DECORACIÓN LATERAL SEGÚN EL MAPA ELEGIDO
+    function dibujarDecoracionMapa(tipo, xIzq, xDer, pyE, esc, indice) {
+      var bw = Math.max(12, 150 * esc);
+      var bh = Math.max(20, 220 * esc);
+
+      if (tipo === "ciudad" || tipo === "neon") {
+        var esNeon = (tipo === "neon");
+        // Edificio izquierdo
+        ctx.fillStyle = esNeon ? "#121226" : (indice % 2 === 0 ? "#4682b4" : "#5a7d9a");
+        ctx.fillRect(xIzq - bw / 2, pyE - bh, bw, bh);
+        ctx.strokeStyle = esNeon ? "#00f3ff" : "#1e1e24";
+        ctx.lineWidth = Math.max(1, 2 * esc);
+        ctx.strokeRect(xIzq - bw / 2, pyE - bh, bw, bh);
+
+        // Edificio derecho
+        ctx.fillStyle = esNeon ? "#1a102e" : (indice % 2 === 0 ? "#b4a08c" : "#968575");
+        ctx.fillRect(xDer - bw / 2, pyE - bh * 1.15, bw, bh * 1.15);
+        ctx.strokeStyle = esNeon ? "#ff007f" : "#1e1e24";
+        ctx.strokeRect(xDer - bw / 2, pyE - bh * 1.15, bw, bh * 1.15);
+
+        // Ventanas iluminadas
+        if (esc > 0.12) {
+          ctx.fillStyle = esNeon ? "#00f3ff" : "#ffeaa7";
+          var filas = 4;
+          for (var f = 1; f <= filas; f++) {
+            ctx.fillRect(xIzq - bw * 0.25, pyE - bh + (bh / 5) * f, bw * 0.18, bh * 0.08);
+            ctx.fillRect(xIzq + bw * 0.08, pyE - bh + (bh / 5) * f, bw * 0.18, bh * 0.08);
+          }
+        }
+      } else if (tipo === "desierto") {
+        // Rocas y Cactus
+        ctx.fillStyle = "#8c5220";
+        ctx.beginPath();
+        ctx.arc(xIzq, pyE, bw * 0.45, Math.PI, 0);
+        ctx.fill();
+
+        // Cactus derecho
+        ctx.fillStyle = "#2e7d32";
+        var cw = Math.max(4, 18 * esc);
+        var ch = Math.max(12, 95 * esc);
+        ctx.fillRect(xDer - cw / 2, pyE - ch, cw, ch);
+        ctx.fillRect(xDer - cw * 1.6, pyE - ch * 0.65, cw * 3.2, cw * 0.8);
+      } else if (tipo === "nieve") {
+        // Pinos nevados a ambos lados
+        [xIzq, xDer].forEach(function(px) {
+          var pw = Math.max(16, 110 * esc);
+          var ph = Math.max(25, 180 * esc);
+          dibujarPoligono([[px, pyE - ph], [px - pw / 2, pyE], [px + pw / 2, pyE]], "#1b4f3e");
+          dibujarPoligono([[px, pyE - ph], [px - pw * 0.28, pyE - ph * 0.45], [px + pw * 0.28, pyE - ph * 0.45]], "#ffffff");
+        });
+      } else if (tipo === "playa") {
+        // Palmeras tropicales
+        [xIzq, xDer].forEach(function(px) {
+          var th = Math.max(25, 190 * esc);
+          var tw = Math.max(3, 12 * esc);
+          ctx.fillStyle = "#6d4c41";
+          ctx.fillRect(px - tw / 2, pyE - th, tw, th);
+          // Hojas de palmera
+          ctx.fillStyle = "#27ae60";
+          ctx.beginPath();
+          ctx.ellipse(px, pyE - th, 55 * esc, 14 * esc, 0.2, 0, Math.PI * 2);
+          ctx.ellipse(px, pyE - th, 55 * esc, 14 * esc, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else if (tipo === "volcan") {
+        // Monolitos volcánicos con grietas de lava
+        [xIzq, xDer].forEach(function(px) {
+          var mw = Math.max(18, 120 * esc);
+          var mh = Math.max(25, 190 * esc);
+          dibujarPoligono([[px, pyE - mh], [px - mw / 2, pyE], [px + mw / 2, pyE]], "#1a0f0d", "#ff4500", Math.max(1, 2 * esc));
+        });
+      }
+    }
+
+    var ultimoTiempo = Date.now();
+
+    function animar() {
+      var ahora = Date.now();
+      var dt = (ahora - ultimoTiempo) / 1000;
+      ultimoTiempo = ahora;
+      if (dt > 0.1) dt = 0.1;
+      if (camaraLenta) dt = dt * 0.35;
+      tiempoAnim += dt;
+
+      var W = canvas.width;
+      var H = canvas.height;
+      var horizonteY = Math.floor(H * 0.46);
+
+      var acel = (teclaW ? 1 : 0) - (teclaS ? 1 : 0);
+      var giro = (teclaD ? 1 : 0) - (teclaA ? 1 : 0);
+      var velTope = teclaNitro ? pistaActual.velMax * 1.25 : pistaActual.velMax;
+      var fuerzaAcel = teclaNitro ? 155 : 95;
+
+      if (acel > 0 || teclaNitro) {
+        velocidad = Math.min(velTope, velocidad + fuerzaAcel * dt);
+      } else if (acel < 0) {
+        velocidad = Math.max(0, velocidad - 170 * dt);
+      } else {
+        velocidad = Math.max(0, velocidad - 45 * dt);
+      }
+
+      velX += giro * 2.9 * pistaActual.agarre * dt;
+      velX *= Math.pow(0.02, pistaActual.agarre * dt);
+      if (velocidad > 2) carroX += velX * (velocidad / 100) * dt * 2.4;
+      carroX = Math.max(-1.15, Math.min(1.15, carroX));
+      posZ += velocidad * dt * 4.5;
+
+      // 1. Cielo con degradado atmosférico
+      var gradCielo = ctx.createLinearGradient(0, 0, 0, horizonteY);
+      gradCielo.addColorStop(0, pistaActual.cieloTop);
+      gradCielo.addColorStop(1, pistaActual.cieloBot);
+      ctx.fillStyle = gradCielo;
+      ctx.fillRect(0, 0, W, horizonteY);
+
+      // Sol o Luna en el horizonte
+      ctx.save();
+      ctx.fillStyle = pistaActual.oscuro ? "rgba(255,255,255,0.85)" : "rgba(255, 240, 180, 0.75)";
+      ctx.beginPath();
+      ctx.arc(W * 0.72 - carroX * 40, horizonteY - 45, 34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 2. Renderizado de carretera pseudo-3D
+      var numFranjas = H - horizonteY;
+      for (var y = 0; y < numFranjas; y++) {
+        var py = horizonteY + y;
+        var prof = (y + 1) / numFranjas;
+        var zMundo = (1.0 / prof) * 18.0 + posZ;
+        var alterna = Math.floor(zMundo * 0.4) % 2 === 0;
+
+        ctx.fillStyle = alterna ? pistaActual.pasto1 : pistaActual.pasto2;
+        ctx.fillRect(0, py, W, 1);
+
+        var anchoVia = 50 + prof * (W * 0.65);
+        var centroX = W / 2 - carroX * prof * (W * 0.28);
+
+        var anchoBorde = 6 + prof * 26;
+        ctx.fillStyle = alterna ? pistaActual.borde1 : pistaActual.borde2;
+        ctx.fillRect(centroX - anchoVia / 2 - anchoBorde, py, anchoVia + anchoBorde * 2, 1);
+
+        ctx.fillStyle = alterna ? pistaActual.via1 : pistaActual.via2;
+        ctx.fillRect(centroX - anchoVia / 2, py, anchoVia, 1);
+
+        if (alterna) {
+          var anchoLinea = Math.max(2, prof * 10);
+          ctx.fillStyle = pistaActual.linea;
+          ctx.fillRect(centroX - anchoLinea, py, anchoLinea * 2, 1);
+        }
+      }
+
+      // 3. Elementos del entorno (edificios, árboles, rocas)
+      for (var i = 18; i >= 1; i--) {
+        var zEdif = i * 40 - (posZ % 40);
+        if (zEdif > 8) {
+          var esc = 18.0 / zEdif;
+          var pyE = horizonteY + esc * numFranjas;
+          var anchoViaE = 50 + esc * (W * 0.65);
+          var centroXE = W / 2 - carroX * esc * (W * 0.28);
+
+          var xIzq = centroXE - anchoViaE / 2 - 135 * esc;
+          var xDer = centroXE + anchoViaE / 2 + 135 * esc;
+
+          dibujarDecoracionMapa(pistaActual.tipoDecoracion, xIzq, xDer, pyE, esc, i);
+        }
+      }
+
+      // 4. Partículas y Carro
+      var carroY = H - 125;
+      actualizarYRegistrarParticulas(W / 2, carroY, dt, teclaS);
+      dibujarCarro(W / 2, carroY, giro, teclaS);
+
+      // 5. Actualizar HUD
+      hudTop.textContent = "Pista: " + pistaActual.nombre + "  |  Velocidad: " + Math.round(velocidad) + " km/h" + (teclaNitro ? "  🔥 NITRO" : "");
+
+      requestAnimationFrame(animar);
+    }
+
+    // Iniciar el bucle del juego
+    animar();
+  </script>
+</body>
+</html>
